@@ -1,0 +1,90 @@
+main.py
+import pandas as pd
+import numpy as np
+import collections
+import math
+
+data = {
+    'Job Role': ['Data Scientist', 'DevOps Engineer', 'Backend Developer', 'System Administrator'],
+    'Skills': [
+        'Python SQL Machine Learning Data Analysis',
+        'AWS Docker Kubernetes CI/CD Automation Cloud',
+        'Java Python SQL APIs Data Structures Backend',
+        'Linux Automation Networking SysAdmin Cloud'
+    ]
+}
+
+df = pd.DataFrame(data)
+
+def compute_tf(document):
+    words = document.lower().split()
+    word_count = len(words)
+    counts = collections.Counter(words)
+    tf = {word: count / word_count for word, count in counts.items()}
+    return tf
+
+def compute_idf(documents):
+    total_docs = len(documents)
+    all_words = set(word for doc in documents for word in doc.lower().split())
+    
+    idf = {}
+    for word in all_words:
+        docs_with_word = sum(1 for doc in documents if word in doc.lower().split())
+        idf[word] = math.log(total_docs / docs_with_word) if docs_with_word > 0 else 0
+    return idf
+
+def get_tfidf_vector(doc_text, idf_dict, vocabulary):
+    tf = compute_tf(doc_text)
+    vector = []
+    for word in vocabulary:
+        weight = tf.get(word, 0) * idf_dict.get(word, 0)
+        vector.append(weight)
+    return np.array(vector)
+
+all_jobs_skills = df['Skills'].tolist()
+vocabulary = list(set(word for doc in all_jobs_skills for word in doc.lower().split()))
+idf_scores = compute_idf(all_jobs_skills)
+
+job_vectors = []
+for skills_text in all_jobs_skills:
+    vector = get_tfidf_vector(skills_text, idf_scores, vocabulary)
+    job_vectors.append(vector)
+
+def cosine_similarity(v1, v2):
+    dot_product = np.dot(v1, v2)
+    norm_v1 = np.linalg.norm(v1)
+    norm_v2 = np.linalg.norm(v2)
+    
+    if norm_v1 == 0 or norm_v2 == 0:
+        return 0.0
+    
+    return dot_product / (norm_v1 * norm_v2)
+
+def tech_stack_recommender():
+    print("=== AI Recommendation System (Project 3) ===")
+    
+    user_inputs = []
+    print("Enter 3 skills to get career recommendations:")
+    for i in range(1, 4):
+        skill = input(f"Skill {i}: ").strip()
+        if skill:
+            user_inputs.append(skill)
+            
+    user_profile_text = " ".join(user_inputs)
+    user_vector = get_tfidf_vector(user_profile_text, idf_scores, vocabulary)
+    
+    scores = []
+    for index, row in df.iterrows():
+        sim_score = cosine_similarity(user_vector, job_vectors[index])
+        scores.append((row['Job Role'], sim_score))
+        
+    scores.sort(key=lambda x: x[1], reverse=True)
+    top_n = scores[:3]
+    
+    print("\n=== Top 3 Recommendations ===")
+    for rank, (role, score) in enumerate(top_n, 1):
+        match_percentage = score * 100
+        print(f"{rank}. {role} - Match: {match_percentage:.1f}%")
+
+if __name__ == "__main__":
+    tech_stack_recommender()
